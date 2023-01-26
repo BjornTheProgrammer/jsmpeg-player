@@ -9,11 +9,84 @@ import { PLAY_BUTTON, UNMUTE_BUTTON } from '../buttonView';
 
 // service
 import Player from './player';
+import MP2WASM from './mp2-wasm';
+import MP2 from './mp2';
+
+export interface Hook {
+  play?: Function;
+  pause?: Function;
+  stop?: Function;
+  load?: Function;
+  destroy?: Function;
+}
+
+export interface Options {
+  videoWrapper?: string | Element;
+  videoUrl?: string;
+  canvas?: HTMLCanvasElement | string;
+  poster?: string;
+  picMode?: boolean;
+  autoplay?: boolean;
+  autoSetWrapperSize?: boolean;
+  loop?: boolean;
+  control?: boolean;
+  decodeFirstFrame?: boolean;
+  progressive?: boolean;
+  chunkSize?: number;
+  hooks?: Hook;
+  needPlayButton?: boolean;
+  hookOnEstablished?: Function;
+  source?: any;
+  streaming?: boolean;
+  maxAudioLag?: number;
+  disableWebAssembly?: boolean;
+  video?: boolean;
+  disableGl?: boolean;
+  audio?: boolean;
+  wasmModule?: any;
+  pauseWhenHidden?: boolean;
+  onPause?: Function;
+  onEnded?: Function;
+  onStalled?: Function;
+  videoBufferSize?: number;
+  audioBufferSize?: number;
+  onVideoDecode?: Function;
+  onAudioDecode?: Function;
+  onPlay?: Function;
+  onSourceEstablished?: Function;
+  onSourceCompleted?: Function;
+  preserveDrawingBuffer?: boolean;
+  throttled?: boolean;
+
+}
+
+interface Wrapper extends Element {
+  clientRect?: DOMRect;
+  playerInstance?: Player | null;
+}
+
+interface Els {
+  wrapper: Wrapper;
+  canvas: null | Element | string;
+  playButton: HTMLDivElement;
+  unmuteButton: null | HTMLDivElement;
+  poster: null | Element & { src?: string};
+  src?: string;
+}
 
 export default class VideoElement {
+  options: Options;
+  player?: null | Player;
+  els: Els;
+  play: Function;
+  pause: Function;
+  stop: Function;
+  destroy: Function;
+  unlockAudioBound?: EventListener;
+
   constructor(
-    wrapper,
-    videoUrl,
+    wrapper: string | Element,
+    videoUrl: string,
     {
       canvas = '',
       poster = '',
@@ -26,8 +99,8 @@ export default class VideoElement {
       progressive = true,
       chunkSize = 1024 * 1024,
       hooks = {},
-    } = {},
-    overlayOptions = {},
+    }: Options = {},
+    overlayOptions: Options = {},
   ) {
     this.options = {
       videoUrl,
@@ -57,7 +130,7 @@ export default class VideoElement {
 
     // Setup canvas and play button
     this.els = {
-      wrapper: isString(wrapper) ? document.querySelector(wrapper) : wrapper,
+      wrapper: isString(wrapper) ? document.querySelector(wrapper as string) : wrapper as Element,
       canvas: null,
       playButton: document.createElement('div'),
       unmuteButton: null,
@@ -78,7 +151,7 @@ export default class VideoElement {
   initCanvas() {
     if (this.options.canvas) {
       this.els.canvas = isString(this.options.canvas)
-        ? document.querySelector(this.options.canvas)
+        ? document.querySelector(this.options.canvas as string)
         : this.options.canvas;
     } else {
       this.els.canvas = document.createElement('canvas');
@@ -109,21 +182,21 @@ export default class VideoElement {
           this.els.poster.classList.add(_style.hidden);
         }
 
-        this.options.hooks.play();
+        if (this.options?.hooks?.play) this.options.hooks.play();
       },
       pause: () => {
         if (this.options.needPlayButton) {
           this.els.playButton.classList.remove(_style.hidden);
         }
 
-        this.options.hooks.pause();
+        if (this.options?.hooks?.pause) this.options.hooks.pause();
       },
       stop: () => {
         if (this.els.poster) {
           this.els.poster.classList.remove(_style.hidden);
         }
 
-        this.options.hooks.stop();
+        if (this.options?.hooks?.stop) this.options.hooks.stop();
       },
       load: () => {
         if (this.options.autoplay) {
@@ -131,7 +204,7 @@ export default class VideoElement {
         }
 
         this._autoSetWrapperSize();
-        this.options.hooks.load();
+        if (this.options?.hooks?.load) this.options.hooks.load();
       },
     });
 
@@ -173,8 +246,10 @@ export default class VideoElement {
       }
 
       this.unlockAudioBound = this.onUnlockAudio.bind(this, unlockAudioElement);
-      unlockAudioElement.addEventListener('touchstart', this.unlockAudioBound, false);
-      unlockAudioElement.addEventListener('click', this.unlockAudioBound, true);
+      if (this.unlockAudioBound) {
+        unlockAudioElement.addEventListener('touchstart', this.unlockAudioBound, false);
+        unlockAudioElement.addEventListener('click', this.unlockAudioBound, true);
+      }
     }
   }
 
@@ -189,7 +264,7 @@ export default class VideoElement {
   }
 
   _autoSetWrapperSize() {
-    if (!this.options.autoSetWrapperSize) {
+    if (!this.options.autoSetWrapperSize || !this.player?.video) {
       return Promise.resolve();
     }
 
@@ -210,6 +285,8 @@ export default class VideoElement {
       ev.preventDefault();
       ev.stopPropagation();
     }
+
+    if (!this.player?.video) return;
     this.player.audioOut.unlock(() => {
       if (this.els.unmuteButton) {
         this.els.unmuteButton.classList.add(_style.hidden);
@@ -224,7 +301,7 @@ export default class VideoElement {
       return;
     }
 
-    if (this.player.isPlaying) {
+    if (this.player?.isPlaying) {
       this.pause();
     } else {
       this.play();
@@ -236,11 +313,11 @@ export default class VideoElement {
    * @private
    */
   _copyPlayerFuncs() {
-    this.play = () => this.player.play();
-    this.pause = () => this.player.pause();
-    this.stop = () => this.player.stop();
+    this.play = () => this.player!.play();
+    this.pause = () => this.player!.pause();
+    this.stop = () => this.player!.stop();
     this.destroy = () => {
-      this.player.destroy();
+      if (this.player?.destroy) this.player.destroy();
       this.els.wrapper.innerHTML = '';
       this.els.wrapper.playerInstance = null;
     };

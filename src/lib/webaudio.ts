@@ -1,6 +1,28 @@
 import { Now } from '../utils';
 
+declare global {
+  interface Window {
+    webkitAudioContext: typeof AudioContext
+  }
+}
+
+interface Context extends AudioContext {
+  _connections?: number;
+}
+
 class WebAudioOut {
+  context: Context;
+  gain: GainNode;
+  destination: GainNode;
+  startTime: number;
+  buffer: null;
+  wallclockStartTime: number;
+  volume: number;
+  enabled: boolean;
+  unlocked: boolean;
+  unlockCallback: null | Function;
+  static CachedContext: null | AudioContext;
+
   constructor() {
     this.context = WebAudioOut.CachedContext = WebAudioOut.CachedContext
       || new (window.AudioContext || window.webkitAudioContext)();
@@ -26,7 +48,7 @@ class WebAudioOut {
 
   destroy() {
     this.gain.disconnect();
-    this.context._connections--;
+    this.context._connections!--;
 
     if (this.context._connections === 0) {
       this.context.close();
@@ -111,6 +133,7 @@ class WebAudioOut {
     if (source.start) {
       source.start(0);
     } else {
+      // @ts-ignore
       source.noteOn(0);
     }
 

@@ -6,7 +6,92 @@ import { Now, Fill } from '../utils';
 import BaseDecoder from './decoder';
 import BitBuffer from './buffer';
 
+type MPEG1Types = null | Int8Array;
+
 class MPEG1 extends BaseDecoder {
+  bits: BitBuffer;
+  onDecodeCallback: Function;
+  customIntraQuantMatrix: Uint8Array;
+  customNonIntraQuantMatrix: Uint8Array;
+  blockData: Int32Array | null;
+  currentFrame: number;
+  decodeFirstFrame: boolean;
+  hasSequenceHeader: boolean;
+  frameRate: number;
+  width: number;
+  height: number;
+  destination: any;
+  intraQuantMatrix: Uint8Array;
+  nonIntraQuantMatrix: Uint8Array;
+  mbWidth: number;
+  mbHeight: number;
+  mbSize: number;
+  codedWidth: number;
+  codedHeight: number;
+  codedSize: number;
+  halfWidth: number;
+  halfHeight: number;
+  currentY: Uint8ClampedArray | null;
+  currentY32: Uint32Array;
+  currentCr: Uint8ClampedArray | null;
+  currentCr32: Uint32Array;
+  currentCb: Uint8ClampedArray | null;
+  currentCb32: Uint32Array;
+  forwardY: Uint8ClampedArray | null;
+  forwardY32: Uint32Array;
+  forwardCr: Uint8ClampedArray | null;
+  forwardCr32: Uint32Array;
+  forwardCb: Uint8ClampedArray | null;
+  forwardCb32: Uint32Array;
+  pictureType: number;
+  fullPelForward: number | boolean;
+  forwardFCode: number;
+  forwardRSize: number;
+  forwardF: number;
+  sliceBegin: boolean;
+  macroblockAddress: number;
+  motionFwHPrev: number;
+  motionFwVPrev: number;
+  motionFwH: number;
+  motionFwV: number;
+  dcPredictorY: number;
+  dcPredictorCr: number;
+  dcPredictorCb: number;
+  quantizerScale: number;
+  mbRow: number;
+  mbCol: number;
+  macroblockType: number;
+  macroblockIntra: number | boolean;
+  macroblockMotFw: number | boolean;
+  static PICTURE_RATE: number[];
+  static ZIG_ZAG: Uint8Array;
+  static DEFAULT_INTRA_QUANT_MATRIX: Uint8Array;
+  static DEFAULT_NON_INTRA_QUANT_MATRIX: Uint8Array;
+  static PREMULTIPLIER_MATRIX: Uint8Array;
+  static MACROBLOCK_ADDRESS_INCREMENT: Int16Array;
+  static MACROBLOCK_TYPE_INTRA: Int8Array;
+  static MACROBLOCK_TYPE_PREDICTIVE: Int8Array;
+  static MACROBLOCK_TYPE_B: Int8Array;
+  static MACROBLOCK_TYPE: MPEG1Types[];
+  static CODE_BLOCK_PATTERN: Int16Array;
+  static MOTION: Int16Array;
+  static DCT_DC_SIZE_LUMINANCE: Int8Array;
+  static DCT_DC_SIZE_CHROMINANCE: Int8Array;
+  static DCT_COEFF: Int32Array;
+  static PICTURE_TYPE: {
+    INTRA: number;
+    PREDICTIVE: number;
+    B: number;
+  };
+  static START: {
+    SEQUENCE: number,
+    SLICE_FIRST: number,
+    SLICE_LAST: number,
+    PICTURE: number,
+    EXTENSION: number,
+    USER_DATA: number,
+  };
+
   constructor(options) {
     super(options);
 
@@ -62,7 +147,7 @@ class MPEG1 extends BaseDecoder {
     return true;
   }
 
-  readHuffman(codeTable) {
+  readHuffman(codeTable: Int32Array | Int16Array | Int8Array) {
     let state = 0;
     do {
       state = codeTable[state + this.bits.read(1)];
@@ -304,7 +389,8 @@ class MPEG1 extends BaseDecoder {
     this.mbCol = this.macroblockAddress % this.mbWidth;
 
     // Process the current macroblock
-    const mbTable = MPEG1.MACROBLOCK_TYPE[this.pictureType];
+    // @ts-ignore
+    const mbTable: Int8Array = MPEG1.MACROBLOCK_TYPE[this.pictureType];
     this.macroblockType = this.readHuffman(mbTable);
     this.macroblockIntra = this.macroblockType & 0x01;
     this.macroblockMotFw = this.macroblockType & 0x08;
@@ -699,28 +785,28 @@ class MPEG1 extends BaseDecoder {
       if (dctSize > 0) {
         const differential = this.bits.read(dctSize);
         if ((differential & (1 << (dctSize - 1))) !== 0) {
-          this.blockData[0] = predictor + differential;
+          if (this.blockData !== null) this.blockData[0] = predictor + differential;
         } else {
-          this.blockData[0] = predictor + ((-1 << dctSize) | (differential + 1));
+          if (this.blockData !== null) this.blockData[0] = predictor + ((-1 << dctSize) | (differential + 1));
         }
       } else {
-        this.blockData[0] = predictor;
+        if (this.blockData !== null) this.blockData[0] = predictor;
       }
 
       // Save predictor value
       if (block < 4) {
         // eslint-disable-next-line prefer-destructuring
-        this.dcPredictorY = this.blockData[0];
+        if (this.blockData !== null) this.dcPredictorY = this.blockData[0];
       } else if (block === 4) {
         // eslint-disable-next-line prefer-destructuring
-        this.dcPredictorCr = this.blockData[0];
+        if (this.blockData !== null) this.dcPredictorCr = this.blockData[0];
       } else {
         // eslint-disable-next-line prefer-destructuring
-        this.dcPredictorCb = this.blockData[0];
+        if (this.blockData !== null) this.dcPredictorCb = this.blockData[0];
       }
 
       // Dequantize + premultiply
-      this.blockData[0] <<= 3 + 5;
+      if (this.blockData !== null) this.blockData[0] <<= 3 + 5;
 
       quantMatrix = this.intraQuantMatrix;
       n = 1;
@@ -778,7 +864,7 @@ class MPEG1 extends BaseDecoder {
       }
 
       // Save premultiplied coefficient
-      this.blockData[dezigZagged] = level * MPEG1.PREMULTIPLIER_MATRIX[dezigZagged];
+      if (this.blockData !== null) this.blockData[dezigZagged] = level * MPEG1.PREMULTIPLIER_MATRIX[dezigZagged];
     }
 
     // Move block to its place
@@ -805,8 +891,10 @@ class MPEG1 extends BaseDecoder {
     if (this.macroblockIntra) {
       // Overwrite (no prediction)
       if (n === 1) {
-        MPEG1.CopyValueToDestination((this.blockData[0] + 128) >> 8, destArray, destIndex, scan);
-        this.blockData[0] = 0;
+        if (this.blockData !== null) {
+          MPEG1.CopyValueToDestination((this.blockData[0] + 128) >> 8, destArray, destIndex, scan);
+          this.blockData[0] = 0;
+        }
       } else {
         MPEG1.IDCT(this.blockData);
         MPEG1.CopyBlockToDestination(this.blockData, destArray, destIndex, scan);
@@ -816,8 +904,10 @@ class MPEG1 extends BaseDecoder {
       // Add data to the predicted macroblock
       // eslint-disable-next-line no-lonely-if
       if (n === 1) {
-        MPEG1.AddValueToDestination((this.blockData[0] + 128) >> 8, destArray, destIndex, scan);
-        this.blockData[0] = 0;
+        if (this.blockData !== null) {
+          MPEG1.AddValueToDestination((this.blockData[0] + 128) >> 8, destArray, destIndex, scan);
+          this.blockData[0] = 0;
+        }
       } else {
         MPEG1.IDCT(this.blockData);
         MPEG1.AddBlockToDestination(this.blockData, destArray, destIndex, scan);

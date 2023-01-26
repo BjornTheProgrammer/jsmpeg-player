@@ -1,6 +1,27 @@
 import { Now } from '../utils';
+import TS from "./ts";
 
 export default class AjaxProgressiveSource {
+  destination: null | TS;
+  request: null | XMLHttpRequest;
+  streaming: boolean;
+  completed: boolean;
+  established: boolean;
+  progress: number;
+  fileSize: number;
+  loadedSize: number;
+  chunkSize: number;
+  isLoading: boolean;
+  loadStartTime: number;
+  throttled: boolean;
+  aborted: boolean;
+  onEstablishedCallback: Function;
+  onCompletedCallback: Function;
+  hookOnEstablished: Function;
+  url: string;
+  loadFails: number;
+  loadTime: number;
+
   constructor(url, options) {
     this.url = url;
     this.destination = null;
@@ -36,8 +57,8 @@ export default class AjaxProgressiveSource {
     this.request = new XMLHttpRequest();
 
     this.request.onreadystatechange = () => {
-      if (this.request.readyState === this.request.DONE) {
-        this.fileSize = parseInt(this.request.getResponseHeader('Content-Length'), 10);
+      if (this.request !== null && this.request.readyState === this.request.DONE) {
+        this.fileSize = parseInt(this.request.getResponseHeader('Content-Length')!, 10);
         this.loadNextChunk();
       }
     };
@@ -61,7 +82,7 @@ export default class AjaxProgressiveSource {
   }
 
   destroy() {
-    this.request.abort();
+    if (this.request) this.request.abort();
     this.aborted = true;
   }
 
@@ -83,12 +104,13 @@ export default class AjaxProgressiveSource {
 
     this.request.onreadystatechange = () => {
       if (
-        this.request.readyState === this.request.DONE
+        this.request !== null
+        && this.request.readyState === this.request.DONE
         && this.request.status >= 200
         && this.request.status < 300
       ) {
         this.onChunkLoad(this.request.response);
-      } else if (this.request.readyState === this.request.DONE) {
+      } else if (this.request !== null && this.request.readyState === this.request.DONE) {
         // Retry?
         if (this.loadFails++ < 3) {
           this.loadNextChunk();

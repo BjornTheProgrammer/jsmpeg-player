@@ -1,6 +1,33 @@
 import BitBuffer from './buffer';
 
+interface pesPacket {
+  destination?: unknown;
+  currentLength?: number;
+  totalLength?: number;
+  pts?: number;
+  buggers?: any[];
+}
+
 class TS {
+  bits: null | BitBuffer;
+  leftoverBytes: null | Uint8Array;
+  guessVideoFrameEnd: boolean;
+  pidsToStreamIds: any;
+  pesPacketInfo: pesPacket;
+  startTime: number;
+  currentTime: number;
+  static STREAM: {
+    PACK_HEADER: number;
+    SYSTEM_HEADER: number;
+    PROGRAM_MAP: number;
+    PRIVATE_1: number;
+    PADDING: number;
+    PRIVATE_2: number;
+    AUDIO_1: number;
+    VIDEO_1: number;
+    DIRECTORY: number;
+  };
+
   constructor() {
     this.bits = null;
     this.leftoverBytes = null;
@@ -40,6 +67,7 @@ class TS {
   }
 
   parsePacket() {
+    if (this.bits === null) return;
     // Check if we're in sync with packet boundaries; attempt to resync if not.
     if (this.bits.read(8) !== 0x47) {
       if (!this.resync()) {
@@ -153,6 +181,7 @@ class TS {
   }
 
   resync() {
+    if (this.bits === null) return;
     // Check if we have enough data to attempt a resync. We need 5 full packets.
     if (!this.bits.has((188 * 6) << 3)) {
       return false;
@@ -195,6 +224,7 @@ class TS {
   }
 
   packetAddData(pi, start, end) {
+    if (this.bits === null) return;
     pi.buffers.push(this.bits.bytes.subarray(start, end));
     pi.currentLength += end - start;
 

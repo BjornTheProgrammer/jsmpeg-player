@@ -1,6 +1,32 @@
 import AjaxSource from './ajax';
 
 export default class WASM {
+  stackSize: number;
+  pageSize: number;
+  onInitCallbacks: Function[];
+  ready: boolean;
+  loadingFromFileStarted: boolean;
+  loadingFromBufferStarted: boolean;
+  onInitCallback: Function;
+  moduleInfo: {
+    memorySize?: number;
+    memoryAlignment?: number;
+    tableSize?: number;
+    tableAlignment?: number;
+  } | null;
+  memory: WebAssembly.Memory;
+  brk: number;
+  instance: WebAssembly.Instance & {
+    exports: {
+      __post_instantiate?: Function;
+    };
+    heapU8?: Uint8Array;
+    heapU32?: Uint32Array;
+    heapF32?: Float32Array;
+    memoryAlignment?: number;
+  };
+  static CACHED_MODULE: WASM;
+
   constructor() {
     this.stackSize = 5 * 1024 * 1024; // emscripten default
     this.pageSize = 64 * 1024; // wasm page size
@@ -33,7 +59,7 @@ export default class WASM {
     ajax.start();
   }
 
-  loadFromBuffer(buffer, callback) {
+  loadFromBuffer(buffer, callback: Function | null = null) {
     if (callback) {
       this.onInitCallbacks.push(callback);
     }
@@ -59,7 +85,7 @@ export default class WASM {
       memory: this.memory,
       memoryBase: 0,
       __memory_base: 0,
-      table: new WebAssembly.Table({ initial: this.moduleInfo.tableSize, element: 'anyfunc' }),
+      table: new WebAssembly.Table({ initial: this.moduleInfo.tableSize!, element: 'anyfunc' }),
       tableBase: 0,
       __table_base: 0,
       abort: this.c_abort.bind(this),
@@ -67,7 +93,7 @@ export default class WASM {
       _sbrk: this.c_sbrk.bind(this),
     };
 
-    this.brk = this.align(this.moduleInfo.memorySize + this.stackSize);
+    this.brk = this.align(this.moduleInfo.memorySize! + this.stackSize);
     WebAssembly.instantiate(buffer, { env }).then((results) => {
       this.instance = results.instance;
       if (this.instance.exports.__post_instantiate) {
@@ -89,7 +115,8 @@ export default class WASM {
 
   align(addr) {
     // eslint-disable-next-line no-restricted-properties
-    const a = 2 ** this.moduleInfo.memoryAlignment;
+    let a;
+    if (this.moduleInfo?.memoryAlignment) a = 2 ** this.moduleInfo.memoryAlignment;
     return Math.ceil(addr / a) * a;
   }
 
@@ -119,7 +146,7 @@ export default class WASM {
   }
 
   // eslint-disable-next-line class-methods-use-this
-  readDylinkSection(buffer) {
+  readDylinkSection(buffer: number[]) {
     // Read the WASM header and dylink section of the .wasm binary data
     // to get the needed table size and static data size.
 

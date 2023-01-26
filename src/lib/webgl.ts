@@ -1,6 +1,20 @@
+import { Options } from "./video-element";
+
 class WebGLRenderer {
-  constructor(options) {
+  options: Options;
+  canvas: HTMLCanvasElement;
+  ownsCanvasElement: boolean;
+  width: number;
+  height: number;
+  enabled: boolean;
+  hasTextureData: any;
+  gl: RenderingContext | null;
+  handleContextLostBound: EventListener;
+  handleContextRestoredBound: EventListener;
+
+  constructor(options: Options) {
     if (options.canvas) {
+      // @ts-ignore
       this.canvas = options.canvas;
       this.ownsCanvasElement = false;
     } else {

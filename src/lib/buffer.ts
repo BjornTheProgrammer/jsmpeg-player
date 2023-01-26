@@ -1,5 +1,14 @@
 class BitBuffer {
-  constructor(bufferOrLength, mode) {
+  bytes: Uint8Array;
+  byteLength: number;
+  mode: number;
+  index: number;
+  static MODE: {
+    EVICT: number;
+    EXPAND: number;
+  }
+
+  constructor(bufferOrLength, mode: number | null = null) {
     if (typeof bufferOrLength === 'object') {
       this.bytes = bufferOrLength instanceof Uint8Array
         ? bufferOrLength
@@ -19,6 +28,7 @@ class BitBuffer {
     const newBytes = new Uint8Array(size);
     if (this.byteLength !== 0) {
       this.byteLength = Math.min(this.byteLength, size);
+      // @ts-ignore
       newBytes.set(this.bytes, 0, this.byteLength);
     }
     this.bytes = newBytes;

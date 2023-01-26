@@ -13,15 +13,36 @@ import CanvasRenderer from './canvas2d';
 import WebAudioOut from './webaudio';
 import WASMModule from './wasm-module';
 import WASM_BINARY from './wasm/WASM_BINARY';
+import { Hook, Options } from './video-element';
 
 export default class Player {
+  options: Options;
+  paused: boolean;
+  hooks: Hook;
+  isPlaying: boolean;
+  source: any;
+  maxAudioLag: number;
+  loop: boolean;
+  autoplay: boolean;
+  demuxer: TS;
+  video: any;
+  renderer: WebGLRenderer | CanvasRenderer;
+  audio: MP2WASM | MP2 | boolean;
+  wasmModule: any;
+  audioOut: WebAudioOut;
+  unpauseOnShow: boolean;
+  wantsToPlay: boolean;
+  animationId: number | null;
+  currentTime: number;
+  startTime: number;
+
   /**
    * @param url
    * @param options
    * @param hooks (play: function, pause: function, stop: function) 插入UI回调
    * @constructor
    */
-  constructor(url, options = {}, hooks = {}) {
+  constructor(url, options: Options = {}, hooks = {}) {
     this.options = options;
 
     this.hooks = hooks;
@@ -50,6 +71,7 @@ export default class Player {
     this.loop = options.loop !== false;
     this.autoplay = !!options.autoplay || options.streaming;
 
+    // @ts-ignore
     this.demuxer = new TS(options);
     this.source.connect(this.demuxer);
 
@@ -71,6 +93,7 @@ export default class Player {
 
     if (options.audio !== false && WebAudioOut.IsSupported()) {
       this.audio = options.wasmModule ? new MP2WASM(options) : new MP2(options);
+      // @ts-ignore
       this.audioOut = new WebAudioOut(options);
       this.demuxer.connect(TS.STREAM.AUDIO_1, this.audio);
       this.audio.connect(this.audioOut);
@@ -139,13 +162,13 @@ export default class Player {
       return;
     }
 
-    cancelAnimationFrame(this.animationId);
+    if (this.animationId) cancelAnimationFrame(this.animationId);
     this.animationId = null;
     this.wantsToPlay = false;
     this.isPlaying = false;
     this.paused = true;
 
-    if (this.audio && this.audio.canPlay) {
+    if (this.audio.canPlay) {
       // Seek to the currentTime again - audio may already be enqueued a bit
       // further, so we have to rewind it.
       this.audioOut.stop();

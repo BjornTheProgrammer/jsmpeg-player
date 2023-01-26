@@ -6,6 +6,7 @@ export const CreateVideoElements = () => {
   const elements = document.querySelectorAll('.jsmpeg');
   for (let i = 0; i < elements.length; i++) {
     // eslint-disable-next-line no-new
+    // @ts-ignore
     new VideoElement(elements[i]);
   }
 };

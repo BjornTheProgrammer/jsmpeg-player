@@ -1,5 +1,18 @@
+import TS from "./ts";
+
 /* eslint class-methods-use-this: ["error", { "exceptMethods": ["resume"] }] */
 export default class AjaxSource {
+  request: null | XMLHttpRequest;
+  url: string;
+  destination: null | TS;
+  streaming: boolean;
+  completed: boolean;
+  established: boolean;
+  progress: number;
+  onEstablishedCallback: Function;
+  onCompletedCallback: Function;
+  hookOnEstablished: Function;
+
   constructor(url, options) {
     this.url = url;
     this.destination = null;
@@ -43,7 +56,7 @@ export default class AjaxSource {
   }
 
   destroy() {
-    this.request.abort();
+    if (this.request !== null) this.request.abort();
   }
 
   onProgress(ev) {
